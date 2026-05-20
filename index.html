@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>TicTacBet</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <style>
+    /* ===== BASE ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0F0F0F;
+      --card: #1C1C1E;
+      --accent: #2AABEE;
+      --text: #FFFFFF;
+      --text-secondary: #8E8E93;
+      --success: #34C759;
+      --danger: #FF3B30;
+      --warning: #FFCC00;
+      --radius: 12px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ===== SCREEN SYSTEM ===== */
+    .screen {
+      position: fixed;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      animation: screenIn 0.3s ease;
+    }
+
+    .screen.active { display: flex; }
+
+    @keyframes screenIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.4; pointer-events: none; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #1E90FF);
+      color: white;
+      box-shadow: 0 4px 16px rgba(42, 171, 238, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 2px solid rgba(255, 59, 48, 0.3);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--accent);
+      padding: 8px 16px;
+    }
+
+    .btn-large {
+      width: 100%;
+      padding: 20px;
+      font-size: 18px;
+      border-radius: var(--radius-lg);
+    }
+
+    /* ===== UTILS ===== */
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .text-center { text-align: center; }
+    .text-secondary { color: var(--text-secondary); }
+    .font-bold { font-weight: 700; }
+
+    .scrollable {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 80px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .scrollable::-webkit-scrollbar { display: none; }
+
+    /* Loading */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--card);
+      color: var(--text);
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast.error { border-color: var(--danger); }
+    .toast.success { border-color: var(--success); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 500;
+      backdrop-filter: blur(10px);
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-box {
+      background: var(--card);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 100%;
+      max-width: 320px;
+      border: 1px solid rgba(255,255,255,0.1);
+      animation: modalIn 0.3s ease;
+    }
+
+    @keyframes modalIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* Game board */
+    .game-cell {
+      background: var(--card);
+      border-radius: 16px;
+      border: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .game-cell:hover:not(.taken) { border-color: rgba(42,171,238,0.3); }
+    .game-cell.taken { cursor: default; }
+    .game-cell.x { color: var(--accent); text-shadow: 0 0 20px rgba(42,171,238,0.5); animation: placeMark 0.3s ease; }
+    .game-cell.o { color: var(--danger); text-shadow: 0 0 20px rgba(255,59,48,0.5); animation: placeMark 0.3s ease; }
+
+    @keyframes placeMark {
+      0% { transform: scale(0); opacity: 0; }
+      70% { transform: scale(1.2); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Animations */
+    @keyframes orbit-spin {
+      from { transform: translate(-50%,-50%) rotate(0deg); }
+      to { transform: translate(-50%,-50%) rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.3; }
+      50% { transform: translate(-50%,-50%) scale(1.2); opacity: 0.15; }
+    }
+
+    @keyframes emojiBounce {
+      0% { transform: scale(0) rotate(-20deg); }
+      60% { transform: scale(1.2) rotate(5deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+
+    @keyframes amountSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes cellAppear {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes statSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes btnSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes confettiFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+
+    @keyframes winPulse {
+      from { box-shadow: 0 0 0 0 rgba(52,199,89,0.4); }
+      to { box-shadow: 0 0 20px 5px rgba(52,199,89,0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="toast" id="toast"></div>
+  <div id="modals"></div>
+  <div id="screens"></div>
+
+  <script>
+    // ===== APP CORE =====
+    const App = {
+      tg: window.Telegram.WebApp,
+      screens: {},
+      currentScreen: null,
+      user: null,
+      token: null,
+      ws: null,
+      game: null,
+      history: [],
+
+      init() {
+        this.tg.ready();
+        this.tg.expand();
+        this.tg.enableClosingConfirmation();
+
+        this.token = localStorage.getItem('token');
+        this.user = JSON.parse(localStorage.getItem('user') || 'null');
+
+        if (!this.token) {
+          this.navigate('splash');
+        } else {
+          this.navigate('dashboard');
+        }
+
+        this.tg.BackButton.onClick(() => this.goBack());
+      },
+
+      register(name, renderFn) {
+        this.screens[name] = renderFn;
+      },
+
+      navigate(name, params = {}) {
+        if (this.currentScreen) {
+          const el = document.getElementById(`screen-${this.currentScreen}`);
+          if (el) el.classList.remove('active');
+        }
+
+        let screenEl = document.getElementById(`screen-${name}`);
+        if (!screenEl) {
+          screenEl = document.createElement('div');
+          screenEl.id = `screen-${name}`;
+          screenEl.className = 'screen';
+          document.getElementById('screens').appendChild(screenEl);
+
+          if (this.screens[name]) {
+            screenEl.innerHTML = this.screens[name](params);
+            this.attachEvents(screenEl, name, params);
+          }
+        }
+
+        screenEl.classList.add('active');
+        this.currentScreen = name;
+
+        if (name !== 'dashboard' && name !== 'splash') {
+          this.tg.BackButton.show();
+        } else {
+          this.tg.BackButton.hide();
+        }
+
+        this.history.push({ name, params });
+      },
+
+      goBack() {
+        if (this.history.length > 1) {
+          this.history.pop();
+          const prev = this.history[this.history.length - 1];
+          this.navigate(prev.name, prev.params);
+        }
+      },
+
+      attachEvents(container, screenName, params) {
+        container.querySelectorAll('[data-action]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const action = btn.dataset.action;
+            const handler = this.actions[action];
+            if (handler) handler(btn, e, params);
+          });
+        });
+
+        if (this.screenEvents[screenName]) {
+          this.screenEvents[screenName](container, params);
+        }
+      },
+
+      actions: {
+        navigate(btn) {
+          App.navigate(btn.dataset.target);
+        },
+
+        async login() {
+          const btn = document.querySelector('[data-action="login"]');
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner"></span>';
+
+          try {
+            const res = await fetch('/api/auth/telegram', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData: App.tg.initData })
+            });
+
+            if (!res.ok) throw new Error('Auth failed');
+
+            const data = await res.json();
+            App.token = data.token;
+            App.user = data.user;
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            App.navigate('dashboard');
+
+          } catch (err) {
+            btn.disabled = false;
+            btn.innerHTML = 'Войти через Telegram';
+            App.showToast('Ошибка входа', 'error');
+          }
+        },
+
+        selectStake(btn) {
+          const stake = parseFloat(btn.dataset.stake);
+          const balance = parseFloat(document.getElementById('stakeBalance')?.dataset.value || 0);
+
+          if (balance < stake) {
+            App.showModal('Недостаточно средств', 
+              `Нужно: ${stake} TON\nБаланс: ${balance.toFixed(2)} TON`, 
+              [{ text: 'Пополнить', action: 'deposit' }, { text: 'Отмена', action: 'close' }]
+            );
+            return;
+          }
+          App.navigate('queue', { stake });
+        },
+
+        cancelQueue() {
+          if (App.ws) App.ws.send(JSON.stringify({ type: 'cancel' }));
+          App.navigate('dashboard');
+        },
+
+        makeMove(btn) {
+          const index = parseInt(btn.dataset.index);
+          if (App.game) App.game.makeMove(index);
+        },
+
+        surrender() {
+          App.showModal('Сдаться?', 
+            'Вы потеряете ставку. Соперник победит.', 
+            [{ text: 'Играть дальше', action: 'close' }, { text: 'Сдаться', action: 'confirmSurrender', danger: true }]
+          );
+        },
+
+        confirmSurrender() {
+          if (App.game) App.game.surrender();
+          App.closeModal();
+        },
+
+        playAgain() {
+          App.navigate('stake');
+        },
+
+        goDashboard() {
+          App.navigate('dashboard');
+        },
+
+        share() {
+          const text = 'Играю в TicTacBet — PvP крестики-нолики со ставками! t.me/TicTacBetBot';
+          App.tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(text)}`);
+        },
+
+        toggleChat() {
+          document.getElementById('chat-panel')?.classList.toggle('active');
+        },
+
+        sendChat(btn) {
+          const msg = btn.dataset.message;
+          if (App.game) App.game.sendChat(msg);
+          document.getElementById('chat-panel')?.classList.remove('active');
+        },
+
+        closeModal() {
+          App.closeModal();
+        }
+      },
+
+      screenEvents: {},
+
+      connectWS(path, handlers) {
+        if (this.ws) this.ws.close();
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(`${protocol}//${window.location.host}${path}?token=${this.token}`);
+
+        this.ws.onmessage = (e) => {
+          const data = JSON.parse(e.data);
+          if (handlers[data.type]) handlers[data.type](data);
+        };
+
+        this.ws.onclose = () => {
+          setTimeout(() => this.connectWS(path, handlers), 3000);
+        };
+      },
+
+      showToast(msg, type = 'info') {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.className = `toast ${type} show`;
+        setTimeout(() => toast.classList.remove('show'), 3000);
+      },
+
+      showModal(title, text, buttons = []) {
+        const container = document.getElementById('modals');
+        const modalId = 'modal-' + Date.now();
+
+        const btnHtml = buttons.map((b, i) => `
+          <button class="btn ${b.danger ? 'btn-danger' : i === 0 ? 'btn-secondary' : 'btn-primary'}" 
+                  style="flex:1;justify-content:center;" data-modal-action="${b.action}">${b.text}</button>
+        `).join('');
+
+        container.innerHTML = `
+          <div class="modal-overlay active" id="${modalId}">
+            <div class="modal-box">
+              <div style="font-size:18px;font-weight:700;margin-bottom:8px;">${title}</div>
+              <div style="color:var(--text-secondary);font-size:14px;margin-bottom:20px;line-height:1.5;">${text.replace(/\n/g, '<br>')}</div>
+              <div style="display:flex;gap:10px;">${btnHtml}</div>
+            </div>
+          </div>
+        `;
+
+        container.querySelectorAll('[data-modal-action]').forEach(btn => {
+          btn.onclick = () => {
+            const action = btn.dataset.modalAction;
+            if (action === 'close') {
+              document.getElementById(modalId)?.remove();
+            } else if (App.actions[action]) {
+              App.actions[action]();
+            } else if (action === 'deposit') {
+              App.tg.openInvoice('deposit', { amount: 1000000000 });
+            }
+          };
+        });
+      },
+
+      closeModal() {
+        document.querySelector('.modal-overlay')?.remove();
+      },
+
+      formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${String(s).padStart(2, '0')}`;
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => App.init());
+  </script>
+</body>
+</html>
