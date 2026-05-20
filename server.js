@@ -10,7 +10,11 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('frontend'));
+app.use(express.static('.'));
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/index.html');
+});
+
 
 // ===== ХРАНИЛИЩЕ (в проде — PostgreSQL + Redis) =====
 const users = new Map();
